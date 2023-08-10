@@ -4,7 +4,7 @@ const { connect } = require("./utils/connect");
 
 const app = express();
 
-const PORT = 5001;
+const PORT = 3000;
 
 connect();
 

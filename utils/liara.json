@@ -1,0 +1,5 @@
+{
+  "platform": "node",
+  "app": "node-app",
+  "port": 3000
+}
