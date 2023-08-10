@@ -1,10 +1,13 @@
 const mongoose = require("mongoose");
+require("dotenv").config();
 
-async function connect() {
+const connect = async () => {
   mongoose
-    .connect("mongodb://127.0.0.1:27017/filterProducts")
-    .then(() => console.log("connected!"))
+    .connect(process.env.DATABSE_URL, {
+      auth: "admin",
+    })
+    .then(() => console.log("database connected!"))
     .catch((error) => console.log(error));
-}
+};
 
 module.exports = { connect };
