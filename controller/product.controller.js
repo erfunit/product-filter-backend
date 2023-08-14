@@ -1,67 +1,135 @@
-const { ProductModel } = require("../model/product.model");
+const mysql = require("mysql2");
+const pool = mysql.createPool({
+  host: process.env.DB_HOST,
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_NAME,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+});
 
 const addNewProduct = async (req, res) => {
-  const { name, price, tags, description } = req.body;
+  try {
+    const { name, price, tags, description } = req.body;
 
-  if (!name || !price || !tags || !description) {
-    res
-      .status(403)
-      .json({ error: "to create a new product, please fill all the fields" });
-    return;
-  } else {
-    const newProduct = new ProductModel({
+    if (!name || !price || !tags || !description) {
+      return res
+        .status(400)
+        .json({ error: "To create a new product, please fill all the fields" });
+    }
+
+    const newProduct = {
       name,
       price,
-      tags,
+      tags: JSON.stringify(tags),
       description,
-    });
+    };
 
-    newProduct.save();
-    res
-      .status(200)
-      .json({ message: "new product added successfully!", data: newProduct });
+    pool.query(
+      "INSERT INTO products (name, price, tags, description) VALUES (?, ?, ?, ?)",
+      [
+        newProduct.name,
+        newProduct.price,
+        newProduct.tags,
+        newProduct.description,
+      ],
+      (err, results) => {
+        if (err) {
+          console.error("Error adding new product:", err);
+          return res.status(500).json({ message: "Internal server error" });
+        }
+        const insertedProductId = results.insertId;
+        res.status(201).json({
+          message: "New product added successfully!",
+          data: { id: insertedProductId, ...newProduct },
+        });
+      }
+    );
+  } catch (error) {
+    console.error("Error adding new product:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
 const getProducts = async (req, res) => {
-  const products = await ProductModel.find({});
-  res.json(products);
-};
-
-const deleteProduct = async (req, res) => {
   try {
-    const productId = req.params.id;
-
-    // Find the product by ID
-    const product = await ProductModel.findById(productId);
-
-    if (!product) {
-      return res.status(404).json({ message: "Product not found" });
-    }
-
-    // Delete the product
-    await ProductModel.findByIdAndDelete(productId);
-
-    return res.json({
-      message: "محصول مورد نظر با موفقیت حذف شد!",
-      data: product,
+    pool.query("SELECT * FROM products", (err, results) => {
+      if (err) {
+        console.error("Error fetching products:", err);
+        return res.status(500).json({ message: "Internal server error" });
+      }
+      res.json(results);
     });
   } catch (error) {
-    console.error("Error deleting product:", error);
+    console.error("Error fetching products:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
 
 const showOneProduct = async (req, res) => {
   try {
-    const product = await ProductModel.findById(req.params.id);
+    const productId = req.params.id;
 
-    if (product) res.json({ data: product });
-    else res.status(404).json({ message: "محصول مورد نظر یافت نشد!" });
-  } catch (err) {
-    res
-      .status(500)
-      .json({ message: "خطا در برقراری ارتباط", error: err.message });
+    pool.query(
+      "SELECT * FROM products WHERE id = ?",
+      [productId],
+      (err, results) => {
+        if (err) {
+          console.error("Error fetching product:", err);
+          return res.status(500).json({ message: "Internal server error" });
+        }
+        if (results.length === 0) {
+          return res.status(404).json({ message: "Product not found" });
+        }
+
+        const product = results[0];
+        res.json({ data: product });
+      }
+    );
+  } catch (error) {
+    console.error("Error fetching product:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+const deleteProduct = async (req, res) => {
+  try {
+    const productId = req.params.id;
+
+    pool.query(
+      "SELECT * FROM products WHERE id = ?",
+      [productId],
+      (err, results) => {
+        if (err) {
+          console.error("Error fetching product:", err);
+          return res.status(500).json({ message: "Internal server error" });
+        }
+        if (results.length === 0) {
+          return res.status(404).json({ message: "Product not found" });
+        }
+
+        const product = results[0];
+
+        pool.query(
+          "DELETE FROM products WHERE id = ?",
+          [productId],
+          (err, results) => {
+            if (err) {
+              console.error("Error deleting product:", err);
+              return res.status(500).json({ message: "Internal server error" });
+            }
+            res.json({
+              message: "Product deleted successfully!",
+              data: product,
+            });
+          }
+        );
+      }
+    );
+  } catch (error) {
+    console.error("Error deleting product:", error);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 
@@ -70,23 +138,45 @@ const updateProduct = async (req, res) => {
     const productId = req.params.id;
     const updatedData = req.body;
 
-    const updatedProduct = await ProductModel.findByIdAndUpdate(
-      productId,
-      updatedData,
-      { new: true }
+    pool.query(
+      "SELECT * FROM products WHERE id = ?",
+      [productId],
+      (err, results) => {
+        if (err) {
+          console.error("Error fetching product:", err);
+          return res.status(500).json({ message: "Internal server error" });
+        }
+        if (results.length === 0) {
+          return res.status(404).json({ message: "Product not found" });
+        }
+
+        const existingProduct = results[0];
+
+        pool.query(
+          "UPDATE products SET name = ?, price = ?, tags = ?, description = ? WHERE id = ?",
+          [
+            updatedData.name,
+            updatedData.price,
+            JSON.stringify(updatedData.tags),
+            updatedData.description,
+            productId,
+          ],
+          (err, results) => {
+            if (err) {
+              console.error("Error updating product:", err);
+              return res.status(500).json({ message: "Internal server error" });
+            }
+            res.json({
+              message: "Product updated successfully!",
+              data: { id: productId, ...updatedData },
+            });
+          }
+        );
+      }
     );
-
-    if (!updatedProduct) {
-      return res.status(404).json({ error: "محصولی یافت نشد!" });
-    }
-
-    return res.json({
-      message: "اطلاعات محصول مورد نظر با موفقیت اپدیت شد",
-      data: updatedProduct,
-    });
   } catch (error) {
     console.error("Error updating product:", error);
-    res.status(500).json({ message: "مشکلی در سرور رخ داده" });
+    res.status(500).json({ message: "Internal server error" });
   }
 };
 

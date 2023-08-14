@@ -6,12 +6,12 @@ const app = express();
 
 const PORT = 3000;
 
-connect();
+connect(); // Connect to MySQL database
 
 app.use(express.json());
 
-app.listen(PORT, () => {
-  console.log("the server is running on port" + PORT);
-});
-
 app.use("/products", productRouter);
+
+app.listen(PORT, () => {
+  console.log("The server is running on port " + PORT);
+});
